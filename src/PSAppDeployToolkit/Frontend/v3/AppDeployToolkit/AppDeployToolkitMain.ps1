@@ -32,6 +32,11 @@ https://psappdeploytoolkit.com
 #
 #---------------------------------------------------------------------------
 
+[CmdletBinding()]
+param
+(
+)
+
 # Remove all functions defined in this script from the function provider.
 Remove-Item -LiteralPath ($adtWrapperFuncs = $MyInvocation.MyCommand.ScriptBlock.Ast.EndBlock.Statements | & { process { if ($_ -is [System.Management.Automation.Language.FunctionDefinitionAst]) { return "Microsoft.PowerShell.Core\Function::$($_.Name)" } } }) -Force -ErrorAction Ignore
 
@@ -2544,6 +2549,11 @@ function Execute-MSI
         $PSBoundParameters.ProductCode = [System.Guid]::new($FilePath)
         $null = $PSBoundParameters.Remove('FilePath')
     }
+    if ($PSBoundParameters.ContainsKey('Transform'))
+    {
+        $PSBoundParameters.Transforms = $Transform.Split(';')
+        $null = $PSBoundParameters.Remove('Transform')
+    }
     if ($PSBoundParameters.ContainsKey('IgnoreExitCodes'))
     {
         $PSBoundParameters.IgnoreExitCodes = $IgnoreExitCodes.Split(',')
@@ -4990,38 +5000,22 @@ $ProgressPreference = [System.Management.Automation.ActionPreference]::SilentlyC
 Set-StrictMode -Version 3
 
 # Import our module backend.
-$adtModule = if ([System.IO.Directory]::Exists("$PSScriptRoot\PSAppDeployToolkit"))
+$moduleName = if ([System.IO.Directory]::Exists("$PSScriptRoot\PSAppDeployToolkit"))
 {
-    # Expected directory when running from a template.
     Get-ChildItem -LiteralPath $PSScriptRoot\PSAppDeployToolkit -Recurse -File | Unblock-File
-    Remove-Module -Name PSAppDeployToolkit* -Force
-    Import-Module -Force -PassThru -FullyQualifiedName @{
-        ModuleName = "$PSScriptRoot\PSAppDeployToolkit\PSAppDeployToolkit.psd1"
-        Guid = '8c3c366b-8606-4576-9f2d-4051144f7ca2'
-        ModuleVersion = '4.0.1'
-    }
+    "$PSScriptRoot\PSAppDeployToolkit\PSAppDeployToolkit.psd1"
 }
 elseif ([System.IO.Directory]::Exists("$PSScriptRoot\..\..\..\..\PSAppDeployToolkit"))
 {
-    # Expected directory if executing directly from inside the module.
     Get-ChildItem -LiteralPath $PSScriptRoot\..\..\..\..\PSAppDeployToolkit -Recurse -File | Unblock-File
-    Remove-Module -Name PSAppDeployToolkit* -Force
-    Import-Module -Force -PassThru -FullyQualifiedName @{
-        ModuleName = "$PSScriptRoot\..\..\..\..\PSAppDeployToolkit\PSAppDeployToolkit.psd1"
-        Guid = '8c3c366b-8606-4576-9f2d-4051144f7ca2'
-        ModuleVersion = '4.0.1'
-    }
+    "$PSScriptRoot\..\..\..\..\PSAppDeployToolkit\PSAppDeployToolkit.psd1"
 }
 else
 {
-    # The module couldn't be found along-side this script.
-    Write-Error -ErrorRecord ([System.Management.Automation.ErrorRecord]::new(
-            [System.IO.FileNotFoundException]::new("PSAppDeployToolkit module folder cannot be found."),
-            'ModuleNotFoundError',
-            [System.Management.Automation.ErrorCategory]::InvalidOperation,
-            $null
-        ))
+    'PSAppDeployToolkit'
 }
+Remove-Module -Name PSAppDeployToolkit* -Force
+$adtModule = Import-Module -FullyQualifiedName @{ ModuleName = $moduleName; Guid = '8c3c366b-8606-4576-9f2d-4051144f7ca2'; ModuleVersion = '4.0.2' } -Force -PassThru -ErrorAction Stop
 
 # Get all parameters from Open-ADTSession that are considered frontend params/variables.
 $sessionVars = $adtModule.ExportedCommands.'Open-ADTSession'.Parameters.Values | & {
